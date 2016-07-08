@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"html/template"
 	"net/http"
 	"strconv"
 
@@ -11,7 +13,67 @@ import (
 	"github.com/sryanyuan/excavator/protocol"
 )
 
-func bdgHandler(w http.ResponseWriter, r *http.Request) {
+var tplFuncMap = template.FuncMap{
+	"writeMagnet": tplfn_writeMagnet,
+}
+
+func tplfn_writeMagnet(item *BDGResult) template.URL {
+	return template.URL(item.MagnetURI)
+}
+
+func searchHandler(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+
+	keyword := r.Form.Get("keyword")
+	maxpage := r.Form.Get("maxpage")
+	maxpageInt, _ := strconv.Atoi(maxpage)
+
+	t := template.New("search.tpl").Funcs(tplFuncMap)
+	t, err := t.ParseFiles("template/search.tpl")
+	if nil != err {
+		panic(err)
+	}
+
+	data := make(map[string]interface{})
+	data["ResultCount"] = 0
+	var buf bytes.Buffer
+
+	defer func() {
+		err = t.Execute(&buf, data)
+		if nil != err {
+			panic(err)
+		}
+		w.Write(buf.Bytes())
+	}()
+
+	if len(keyword) == 0 {
+		//	show homepage
+		data["LastSearch"] = ""
+	} else {
+		data["LastSearch"] = keyword
+
+		//	search it
+		executor := &BDGExecutor{}
+		if err := executor.Execute("http://btdigg.pw/", "keyword", []string{keyword}, maxpageInt); nil != err {
+			data["Error"] = err.Error()
+			return
+		}
+		result := executor.GetResult()
+		resultSet, ok := result.([]*BDGResult)
+		if !ok {
+			panic("invalid result set")
+		}
+		if nil == result {
+			data["Error"] = "没有搜索结果"
+			return
+		} else {
+			data["ResultCount"] = len(resultSet)
+			data["SearchResult"] = resultSet
+		}
+	}
+}
+
+func bdgHandler_(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 
 	resultProto := &protocol.SearchResult{}
@@ -68,8 +130,7 @@ func bdgHandler(w http.ResponseWriter, r *http.Request) {
 				ritem.FileCount = proto.String(v.FileCount)
 				ritem.FileSize = proto.String(v.FileSize)
 				ritem.MagnetURI = proto.String(v.MagnetURI)
-				popular, _ := strconv.Atoi(v.Popular)
-				ritem.Popular = proto.Int(popular)
+				ritem.Popular = proto.Int(v.Popular)
 				resultProto.ResultSet = append(resultProto.ResultSet, ritem)
 			}
 		}

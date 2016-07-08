@@ -13,7 +13,10 @@ import (
 
 	"time"
 
+	"sort"
+
 	"github.com/PuerkitoBio/goquery"
+	"github.com/robertkrimen/otto"
 )
 
 type BDGResult struct {
@@ -23,13 +26,29 @@ type BDGResult struct {
 	CollectTime   string
 	FileSize      string
 	FileCount     string
-	Popular       string
+	Popular       int
 	MagnetURI     string
 }
 
 type BDGExecutor struct {
 	executeUrl string
 	resultSet  []*BDGResult
+}
+
+type BDGResultSet []*BDGResult
+
+func (s BDGResultSet) Len() int {
+	return len(s)
+}
+
+func (s BDGResultSet) Swap(i, j int) {
+	tmp := s[i]
+	s[i] = s[j]
+	s[j] = tmp
+}
+
+func (s BDGResultSet) Less(i, j int) bool {
+	return s[i].Popular < s[j].Popular
 }
 
 func (this *BDGExecutor) Execute(executeUrl string, key string, values []string, maxPage int) error {
@@ -39,7 +58,6 @@ func (this *BDGExecutor) Execute(executeUrl string, key string, values []string,
 		key: values,
 	}
 
-	//把form数据编下码
 	body := ioutil.NopCloser(strings.NewReader(v.Encode()))
 	client := new(http.Client)
 	req, _ := http.NewRequest("POST", executeUrl, body)
@@ -47,27 +65,24 @@ func (this *BDGExecutor) Execute(executeUrl string, key string, values []string,
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.152 Safari/537.36")
 
 	log.Println("First request to get data...")
-	resp, err := client.Do(req) //发送
+	resp, err := client.Do(req)
 	if nil != err {
 		log.Println("Error:", err)
 		return err
 	}
-	defer resp.Body.Close() //一定要关闭resp.Body
+	defer resp.Body.Close()
 	data, err := ioutil.ReadAll(resp.Body)
 	if nil != err {
 		log.Println("Error:", err)
 		return err
 	}
-	log.Println("Done...")
-	/*fout, err := os.Open("wd")
-	defer fout.Close()
-	if err != nil {
-		return err
+
+	if nil == data ||
+		len(data) == 0 {
+		return errors.New("Request timeout, please retry agin")
 	}
-	data, err := ioutil.ReadAll(fout)
-	if nil != err {
-		return err
-	}*/
+	log.Println("Done...")
+
 	this.resultSet = make([]*BDGResult, 0, 20)
 
 	reader := bytes.NewBuffer(data)
@@ -109,41 +124,40 @@ func (this *BDGExecutor) Execute(executeUrl string, key string, values []string,
 			break
 		}
 	}
-	if len(lastPageUrl) == 0 {
-		return errors.New("Invalid page url")
-	}
-
-	for i := 2; i <= lastPageNumber; i++ {
-		pageLinks = append(pageLinks, lastPageUrl+strconv.Itoa(i)+"/0/0.html")
+	if len(lastPageUrl) != 0 {
+		for i := 2; i <= lastPageNumber; i++ {
+			pageLinks = append(pageLinks, lastPageUrl+strconv.Itoa(i)+"/0/0.html")
+		}
 	}
 
 	//	parse home page
 	this.parseDoc(doc)
 
 	//	parse other pages
-	for _, v := range pageLinks {
-		log.Println("Get page", v, " data...")
+	for i, v := range pageLinks {
+		log.Println("Get page", i, " data...")
 		time.Sleep(time.Millisecond * 100)
 		pageClient := new(http.Client)
 		pageReq, _ := http.NewRequest("GET", v, nil)
 		pageReq.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
 		pageReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.152 Safari/537.36")
 
-		pageResp, err := pageClient.Do(pageReq) //发送
+		pageResp, err := pageClient.Do(pageReq)
 		if nil != err {
 			log.Println("Error:", err)
-			return err
+			continue
 		}
-		defer pageResp.Body.Close() //一定要关闭resp.Body
+		defer pageResp.Body.Close()
 		pageData, err := ioutil.ReadAll(pageResp.Body)
 		if nil != err {
 			log.Println("Error:", err)
-			return err
+			continue
 		}
 
 		pageDoc, err := goquery.NewDocumentFromReader(bytes.NewBuffer(pageData))
 		if nil != err {
-			return err
+			log.Println("Error:", err)
+			continue
 		}
 		this.parseDoc(pageDoc)
 	}
@@ -168,6 +182,10 @@ func (this *BDGExecutor) parseDoc(doc *goquery.Document) {
 	nodes := doc.Find(".list").Find("dl")
 
 	//	get search item
+	o := otto.New()
+	var jsValue otto.Value
+	var err error
+
 	nodes.Each(func(i int, sel *goquery.Selection) {
 		item := &BDGResult{}
 		item.Name = sel.Find("dd.flist").Find("p").Find("span.filename").Text()
@@ -175,10 +193,49 @@ func (this *BDGExecutor) parseDoc(doc *goquery.Document) {
 		item.FileSize = sel.Find("span").Eq(1).Find("b").Text()
 		item.FileCount = sel.Find("span").Eq(2).Find("b").Text()
 		item.DownloadSpeed = sel.Find("span").Eq(3).Find("b").Text()
-		item.Popular = sel.Find("span").Eq(4).Find("b").Text()
-		item.MagnetURI, _ = sel.Find("span").Eq(5).Find("a").Attr("href")
+		popularStr := sel.Find("span").Eq(4).Find("b").Text()
+		item.Popular, _ = strconv.Atoi(popularStr)
+		item.MagnetURI = sel.Find("span").Eq(5).Find("script").Text()
+
+		//	process name and magnet
+		if strings.Index(item.Name, "document.write(") == 0 {
+			strData := []rune(item.Name)
+			strData = strData[15 : len(strData)-1-1]
+			item.Name = string(strData)
+		}
+		jsValue, err = o.Run(item.Name)
+		if err == nil &&
+			jsValue.IsString() {
+			item.Name, err = jsValue.ToString()
+		}
+
+		if strings.Index(item.MagnetURI, "document.write(") == 0 {
+			strData := []rune(item.MagnetURI)
+			strData = strData[15 : len(strData)-1-1]
+			item.MagnetURI = string(strData)
+		}
+		jsValue, err = o.Run(item.MagnetURI)
+		if err == nil &&
+			jsValue.IsString() {
+			item.MagnetURI, err = jsValue.ToString()
+
+			begIndex := strings.Index(item.MagnetURI, "href='")
+			endIndex := strings.Index(item.MagnetURI, "' >磁力链</a>")
+
+			if begIndex != -1 &&
+				endIndex != -1 {
+				strData := []rune(item.MagnetURI)
+				strData = strData[begIndex+6 : endIndex]
+				item.MagnetURI = string(strData)
+			}
+		}
+
+		//	add to result list
 		this.resultSet = append(this.resultSet, item)
 	})
+
+	//	sort by Popular
+	sort.Sort(sort.Reverse(BDGResultSet(this.resultSet)))
 }
 
 func (this *BDGExecutor) GetResult() interface{} {

@@ -13,10 +13,16 @@ import (
 )
 
 func main() {
-	flag.Parse()
 	lisaddr := flag.String("lisaddr", "localhost:1111", "listen address")
+	flag.Parse()
 
-	http.HandleFunc("/s", bdgHandler)
+	//	static file
+	http.Handle("/static/css/", http.FileServer(http.Dir(".")))
+	http.Handle("/static/js/", http.FileServer(http.Dir(".")))
+	http.Handle("/static/img/", http.FileServer(http.Dir(".")))
+	http.Handle("/static/fonts/", http.FileServer(http.Dir(".")))
+
+	http.HandleFunc("/", searchHandler)
 	http.ListenAndServe(*lisaddr, nil)
 }
 
@@ -81,8 +87,7 @@ func cmdMain() {
 				ritem.FileCount = proto.String(v.FileCount)
 				ritem.FileSize = proto.String(v.FileSize)
 				ritem.MagnetURI = proto.String(v.MagnetURI)
-				popular, _ := strconv.Atoi(v.Popular)
-				ritem.Popular = proto.Int(popular)
+				ritem.Popular = proto.Int(v.Popular)
 				resultProto.ResultSet = append(resultProto.ResultSet, ritem)
 			}
 		}
