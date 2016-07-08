@@ -1,0 +1,1 @@
+protoc searchdata.proto --go_out=%cd%

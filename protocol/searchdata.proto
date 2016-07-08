@@ -1,0 +1,17 @@
+package protocol;
+
+message SearchItem {
+	required string Name = 1;
+	required int32 DownloadTimes = 2;
+	required string DownloadSpeed = 3;
+	required string CollectTime = 4;
+	required string FileSize = 5;
+	required string FileCount = 6;
+	required int32 Popular = 7;
+	required string MagnetURI = 8;
+}
+
+message SearchResult {
+	required int32 Result = 1;
+	repeated SearchItem ResultSet = 2;
+}

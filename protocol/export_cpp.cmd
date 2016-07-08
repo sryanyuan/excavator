@@ -1,0 +1,1 @@
+protoc searchdata.proto --cpp_out=%cd%
