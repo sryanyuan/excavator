@@ -1,7 +1,7 @@
 body,button, input, select, textarea,h1 ,h2, h3, h4, h5, h6 { font-family: Microsoft YaHei,'宋体' , Tahoma, Helvetica, Arial, "\5b8b\4f53", sans-serif;}
 
 body {
-  padding-top: 70px;
+  padding-top: 100px;
   padding-bottom: 30px;
   background-color: #f2f2f2;
   padding-bottom: 0px;
@@ -14,4 +14,31 @@ body {
     text-align: center;
     color: #999;
     padding: 0px 10px 0px 10px;
+}
+
+#id-searchform {
+	text-align: center;
+}
+
+#id-searchoption {
+	margin-top:8px;
+}
+
+#id-scrolltip {
+	margin-top:8px;
+	color: #999;
+}
+
+#id-searchbutton {
+	margin-left:5px;
+}
+
+#id-logotext {
+	padding-top:15px;
+	font-family:Microsoft YaHei;
+	font-weight:bold;
+}
+
+#id-resultcontainerfoot {
+	text-align: center;
 }

@@ -3,62 +3,42 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"strconv"
-	//"os"
 	"strings"
 
 	"time"
-
-	"sort"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/robertkrimen/otto"
 )
 
-type BDGResult struct {
-	Name          string
-	DownloadTimes string
-	DownloadSpeed string
-	CollectTime   string
-	FileSize      string
-	FileCount     string
-	Popular       int
-	MagnetURI     string
-}
+const (
+	kBDGUrlSearch = "http://btdigg.pw/"
+	kBDGUrlPage   = "http://btdigg.pw/search/"
+)
 
 type BDGExecutor struct {
 	executeUrl string
-	resultSet  []*BDGResult
+	resultSet  []*SearchResult
+	TotalPage  int
+	Hashkey    string
+	TotalCount int
 }
 
-type BDGResultSet []*BDGResult
-
-func (s BDGResultSet) Len() int {
-	return len(s)
-}
-
-func (s BDGResultSet) Swap(i, j int) {
-	tmp := s[i]
-	s[i] = s[j]
-	s[j] = tmp
-}
-
-func (s BDGResultSet) Less(i, j int) bool {
-	return s[i].Popular < s[j].Popular
-}
-
-func (this *BDGExecutor) Execute(executeUrl string, key string, values []string, maxPage int) error {
-	this.executeUrl = executeUrl
+func (this *BDGExecutor) Execute(keyword string, maxPage int) error {
+	executeUrl := kBDGUrlSearch
+	this.resultSet = make([]*SearchResult, 0, 20)
 
 	v := url.Values{
-		key: values,
+		"keyword": []string{keyword},
 	}
 
-	body := ioutil.NopCloser(strings.NewReader(v.Encode()))
+	/*body := ioutil.NopCloser(strings.NewReader(v.Encode()))
 	client := new(http.Client)
 	req, _ := http.NewRequest("POST", executeUrl, body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
@@ -75,28 +55,30 @@ func (this *BDGExecutor) Execute(executeUrl string, key string, values []string,
 	if nil != err {
 		log.Println("Error:", err)
 		return err
+	}*/
+	data, err := httpGet(executeUrl, v)
+	if err != nil {
+		log.Println("Error:", err)
+		return err
 	}
-
 	if nil == data ||
 		len(data) == 0 {
 		return errors.New("Request timeout, please retry agin")
 	}
-	log.Println("Done...")
-
-	this.resultSet = make([]*BDGResult, 0, 20)
 
 	reader := bytes.NewBuffer(data)
 	doc, err := goquery.NewDocumentFromReader(reader)
 	if nil != err {
 		log.Println("Error:", err)
-		return err
+		return errors.New("获取数据超时，请重试")
 	}
 
 	//	get pages
 	pageLinks := make([]string, 0, 10)
 	lastPageText := []rune(doc.Find("div.page-split").Find("span").Text())
 	if len(lastPageText) == 0 {
-		return errors.New("Invalid page number")
+		//return errors.New("获取数据超时，请重试")
+		return nil
 	}
 	lastPageNumberText := string(lastPageText[1 : len(lastPageText)-1])
 	lastPageUrlHref, _ := doc.Find("div.page-split").Find("a").First().Attr("href")
@@ -105,7 +87,23 @@ func (this *BDGExecutor) Execute(executeUrl string, key string, values []string,
 	if nil != err {
 		return err
 	}
-	log.Println("Get total page:", lastPageNumber, "page limit:", maxPage)
+	this.TotalPage = lastPageNumber
+	//	get hash key
+	hashKeys := strings.Split(lastPageUrlHref, "/")
+	if len(hashKeys) > 4 {
+		this.Hashkey = hashKeys[len(hashKeys)-4]
+	}
+
+	//	get total search result count
+	searchResultCountText := []rune(doc.Find("a.select").Text())
+	if len(searchResultCountText) != 0 {
+		searchResultCountNumberText := string(searchResultCountText[3 : len(searchResultCountText)-1])
+		this.TotalCount, _ = strconv.Atoi(searchResultCountNumberText)
+	}
+	if this.TotalCount == 0 {
+		return nil
+	}
+
 	if 0 != maxPage &&
 		lastPageNumber > maxPage {
 		lastPageNumber = maxPage
@@ -165,17 +163,54 @@ func (this *BDGExecutor) Execute(executeUrl string, key string, values []string,
 	return nil
 }
 
-func (this *BDGExecutor) parse(data []byte) error {
-	reader := bytes.NewBuffer(data)
-	doc, err := goquery.NewDocumentFromReader(reader)
-	if nil != err {
-		log.Println("Error:", err)
-		return err
+func (this *BDGExecutor) ExecutePage(keyhash string, page int) bool {
+	if nil == this.resultSet {
+		this.resultSet = make([]*SearchResult, 0, 20)
+	} else {
+		this.resultSet = this.resultSet[0:0]
+	}
+	if len(keyhash) == 0 {
+		return false
+	}
+	if page < 1 {
+		return false
 	}
 
-	this.parseDoc(doc)
+	pageUrl := fmt.Sprintf("%s%s/%d/0/0.html", kBDGUrlPage, keyhash, page)
+	/*pageClient := new(http.Client)
+	pageReq, _ := http.NewRequest("GET", pageUrl, nil)
+	pageReq.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
+	pageReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.152 Safari/537.36")
 
-	return nil
+	pageResp, err := pageClient.Do(pageReq)
+	if nil != err {
+		log.Println("Error:", err)
+		return false
+	}
+	defer pageResp.Body.Close()
+	pageData, err := ioutil.ReadAll(pageResp.Body)
+	if nil != err {
+		log.Println("Error:", err)
+		return false
+	}*/
+	pageData, err := httpGet(pageUrl, nil)
+	if err != nil {
+		log.Println("Error:", err)
+		return false
+	}
+	if nil == pageData ||
+		len(pageData) == 0 {
+		log.Println("empty body")
+		return false
+	}
+
+	pageDoc, err := goquery.NewDocumentFromReader(bytes.NewBuffer(pageData))
+	if nil != err {
+		log.Println("Error:", err)
+		return false
+	}
+	this.parseDoc(pageDoc)
+	return true
 }
 
 func (this *BDGExecutor) parseDoc(doc *goquery.Document) {
@@ -187,7 +222,7 @@ func (this *BDGExecutor) parseDoc(doc *goquery.Document) {
 	var err error
 
 	nodes.Each(func(i int, sel *goquery.Selection) {
-		item := &BDGResult{}
+		item := &SearchResult{}
 		item.Name = sel.Find("dd.flist").Find("p").Find("span.filename").Text()
 		item.CollectTime = sel.Find("span").Eq(0).Find("b").Text()
 		item.FileSize = sel.Find("span").Eq(1).Find("b").Text()
@@ -233,12 +268,9 @@ func (this *BDGExecutor) parseDoc(doc *goquery.Document) {
 		//	add to result list
 		this.resultSet = append(this.resultSet, item)
 	})
-
-	//	sort by Popular
-	sort.Sort(sort.Reverse(BDGResultSet(this.resultSet)))
 }
 
-func (this *BDGExecutor) GetResult() interface{} {
+func (this *BDGExecutor) GetResult() []*SearchResult {
 	if nil == this.resultSet {
 		return nil
 	}
