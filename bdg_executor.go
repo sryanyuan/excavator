@@ -38,24 +38,6 @@ func (this *BDGExecutor) Execute(keyword string, maxPage int) error {
 		"keyword": []string{keyword},
 	}
 
-	/*body := ioutil.NopCloser(strings.NewReader(v.Encode()))
-	client := new(http.Client)
-	req, _ := http.NewRequest("POST", executeUrl, body)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.152 Safari/537.36")
-
-	log.Println("First request to get data...")
-	resp, err := client.Do(req)
-	if nil != err {
-		log.Println("Error:", err)
-		return err
-	}
-	defer resp.Body.Close()
-	data, err := ioutil.ReadAll(resp.Body)
-	if nil != err {
-		log.Println("Error:", err)
-		return err
-	}*/
 	data, err := httpGet(executeUrl, v)
 	if err != nil {
 		log.Println("Error:", err)
@@ -177,22 +159,6 @@ func (this *BDGExecutor) ExecutePage(keyhash string, page int) bool {
 	}
 
 	pageUrl := fmt.Sprintf("%s%s/%d/0/0.html", kBDGUrlPage, keyhash, page)
-	/*pageClient := new(http.Client)
-	pageReq, _ := http.NewRequest("GET", pageUrl, nil)
-	pageReq.Header.Set("Content-Type", "application/x-www-form-urlencoded; param=value")
-	pageReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.152 Safari/537.36")
-
-	pageResp, err := pageClient.Do(pageReq)
-	if nil != err {
-		log.Println("Error:", err)
-		return false
-	}
-	defer pageResp.Body.Close()
-	pageData, err := ioutil.ReadAll(pageResp.Body)
-	if nil != err {
-		log.Println("Error:", err)
-		return false
-	}*/
 	pageData, err := httpGet(pageUrl, nil)
 	if err != nil {
 		log.Println("Error:", err)

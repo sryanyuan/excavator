@@ -42,3 +42,8 @@ body {
 #id-resultcontainerfoot {
 	text-align: center;
 }
+
+#id-alertgroup {
+	margin-top: 10px;
+	margin-bottom: 10px;
+}

@@ -42,7 +42,7 @@
 					<input id="id-currentpage" type="hidden" name="currentpage" value="{{.CurrentPage}}">
 					<input id="id-keyhash" type="hidden" name="keyhash" value="{{.Keyhash}}">
 				</div>
-				<div id="id-alertgroup" class="alert alert-warning fade in">
+				<div id="id-alertgroup" class="alert alert-warning fade in hidden">
 					<button id="id-alerttip" type="button" class="close" aria-hidden="true">×</button>  
 					<p>Message</p>  
 				</div>  

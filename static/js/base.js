@@ -32,9 +32,10 @@ function requestNewPage() {
 		}
 		
 		pullingData = true;
+		hideAlertMessage();
 		$.get("/page?keyhash="+keyhash+"&page="+nextPage, function(ret){
 			//	close the alertgroup
-			$("#id-alertgroup").hide();
+			//hideAlertMessage();
 			
 			pullingData = false;
 			
@@ -67,17 +68,22 @@ function requestNewPage() {
 }
 
 $("#id-alerttip").click(function(){
-	$("#id-alertgroup").fadeOut();
+	//$("#id-alertgroup").fadeOut();
+	hideAlertMessage();
 })
 
 function showAlertMessage(msg) {
 	$("#id-alertgroup").find("p").html(msg);
-	$("#id-alertgroup").fadeIn();
-	$("#id-alerttip").fadeIn();
+	//$("#id-alertgroup").fadeIn();
+	//$("#id-alerttip").fadeIn();
+	$("#id-alertgroup").removeClass("hidden");
 }
 
 function hideAlertMessage() {
-	$("#id-alertgroup").hide();
+	//$("#id-alertgroup").hide();
+	if (!$("#id-alertgroup").hasClass("hidden")){
+		$("#id-alertgroup").addClass("hidden");
+	}
 }
 
 /*$("#id-searchbutton").click(function(){
@@ -106,7 +112,8 @@ function hideAlertMessage() {
 
 $(document).ready(function(){
 	//	hide alert group
-	$("#id-alertgroup").hide();
+	//$("#id-alertgroup").hide();
+	//$("#id-alertgroup").removeClass("hidden");
 	
 	//	hide ?
 	var totalPage = Number($("#id-totalpage").attr("value"));
