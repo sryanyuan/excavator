@@ -230,6 +230,7 @@ func (this *BDGExecutor) parseDoc(doc *goquery.Document) {
 				item.MagnetURI = string(strData)
 			}
 		}
+		item.MagnetURI, _ = sel.Find("span").Eq(5).Find("a").Attr("href")
 
 		//	add to result list
 		this.resultSet = append(this.resultSet, item)
